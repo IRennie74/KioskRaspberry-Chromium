@@ -1,8 +1,8 @@
 #!/bin/bash
 
 # ============================================================================
-#  broctic_kiosk_setup.sh
-#  Broctic Inc. — Raspberry Pi Kiosk Display Setup
+#  kiosk_setup.sh
+#  Raspberry Pi Kiosk Display Setup
 #
 #  Interactive setup for a Chromium kiosk on Raspberry Pi OS (Wayland/labwc).
 #  Tested on Raspberry Pi OS / Debian-based systems.
@@ -20,7 +20,7 @@
 #  Based on TOLDOTECHNIK/Raspberry-Pi-Kiosk-Display-System (kiosk_setup.sh)
 #
 #  History
-#  2026-07-07 v2.0: Broctic rewrite — restructured into functions, shared
+#  2026-07-07 v2.0: Rewrite — restructured into functions, shared
 #                   helpers, sudo keepalive, custom splash URL, setup summary
 # ============================================================================
 
@@ -37,7 +37,7 @@ AUTOSTART_FILE="$LABWC_DIR/autostart"
 RC_XML="$LABWC_DIR/rc.xml"
 CONFIG_TXT="/boot/firmware/config.txt"
 CMDLINE_TXT="/boot/firmware/cmdline.txt"
-REBOOT_CRON_FILE="/etc/cron.d/broctic-kiosk-reboot"
+REBOOT_CRON_FILE="/etc/cron.d/kiosk-nightly-reboot"
 DEBUG_PORT=9222
 
 # Collected for the final summary
@@ -54,7 +54,7 @@ log_head() { echo -e "\n\e[94m── $1 ──\e[0m"; }
 banner() {
     echo -e "\e[35m"
     echo "  ┌──────────────────────────────────────────────┐"
-    echo "  │   BROCTIC  ·  Kiosk Display Setup  v$SCRIPT_VERSION       │"
+    echo "  │       Kiosk Display Setup  ·  v$SCRIPT_VERSION            │"
     echo "  └──────────────────────────────────────────────┘"
     echo -e "\e[0m"
 }
@@ -694,7 +694,7 @@ section_nightly_reboot() {
 
     log_step "Creating cron job for nightly reboot at $reboot_time..."
     sudo tee "$REBOOT_CRON_FILE" > /dev/null << EOL
-# Broctic kiosk: nightly reboot
+# Kiosk display: nightly reboot
 $minute $hour * * * root /sbin/shutdown -r now
 EOL
     sudo chmod 644 "$REBOOT_CRON_FILE"
