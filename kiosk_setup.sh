@@ -15,6 +15,7 @@
 #    - Crash/freeze protection (restart loop + DevTools watchdog)
 #    - Periodic page auto-refresh (default: every 3 hours)
 #    - Scheduled nightly reboot (default: 02:00)
+#    - Hardware watchdog: auto-reboot if the whole system freezes or panics
 #    - Cursor hiding, boot splash, resolution, rotation, HDMI audio, CEC
 #
 #  Based on TOLDOTECHNIK/Raspberry-Pi-Kiosk-Display-System (kiosk_setup.sh)
@@ -22,6 +23,7 @@
 #  History
 #  2026-07-07 v2.0: Rewrite — restructured into functions, shared
 #                   helpers, sudo keepalive, custom splash URL, setup summary
+#  2026-07-07 v2.1: Added hardware watchdog + kernel panic auto-reboot
 # ============================================================================
 
 set -u
@@ -29,7 +31,7 @@ set -u
 # ----------------------------------------------------------------------------
 # Constants
 # ----------------------------------------------------------------------------
-SCRIPT_VERSION="2.0"
+SCRIPT_VERSION="2.1"
 CURRENT_USER=$(whoami)
 HOME_DIR=$(eval echo "~$CURRENT_USER")
 LABWC_DIR="$HOME_DIR/.config/labwc"
@@ -38,6 +40,8 @@ RC_XML="$LABWC_DIR/rc.xml"
 CONFIG_TXT="/boot/firmware/config.txt"
 CMDLINE_TXT="/boot/firmware/cmdline.txt"
 REBOOT_CRON_FILE="/etc/cron.d/kiosk-nightly-reboot"
+HW_WATCHDOG_CONF="/etc/systemd/system.conf.d/10-kiosk-watchdog.conf"
+PANIC_SYSCTL_CONF="/etc/sysctl.d/90-kiosk-panic.conf"
 DEBUG_PORT=9222
 
 # Collected for the final summary
@@ -702,6 +706,60 @@ EOL
     CONFIGURED+=("Nightly reboot at $reboot_time")
 }
 
+section_hw_watchdog() {
+    log_head "Hardware watchdog (system auto-recovery)"
+    if ! ask_user "Enable the hardware watchdog so the Pi reboots itself if the whole system freezes?" "y"; then
+        return
+    fi
+
+    # 1. Enable the SoC watchdog device in firmware config
+    if [ -f "$CONFIG_TXT" ]; then
+        if grep -q "^dtparam=watchdog=on" "$CONFIG_TXT"; then
+            log_warn "$CONFIG_TXT already has dtparam=watchdog=on. No changes made."
+        else
+            log_step "Adding dtparam=watchdog=on to $CONFIG_TXT..."
+            echo 'dtparam=watchdog=on' | sudo tee -a "$CONFIG_TXT" > /dev/null
+            log_ok "Watchdog device enabled in firmware config."
+        fi
+    else
+        log_warn "$CONFIG_TXT not found — skipping firmware watchdog parameter."
+    fi
+
+    # 2. Have systemd feed the watchdog; if the kernel/systemd hangs and the
+    #    watchdog isn't fed for 15s, the SoC forces a hardware reboot.
+    if [ -f "$HW_WATCHDOG_CONF" ]; then
+        log_warn "$HW_WATCHDOG_CONF already exists. No changes made — please check manually."
+    else
+        log_step "Configuring systemd to feed the hardware watchdog..."
+        sudo mkdir -p /etc/systemd/system.conf.d
+        sudo tee "$HW_WATCHDOG_CONF" > /dev/null << 'EOL'
+# Kiosk display: hardware watchdog
+# If systemd stops feeding the SoC watchdog for 15s (system hang),
+# the hardware forces a reboot. RebootWatchdogSec covers hangs
+# during the reboot/shutdown sequence itself.
+[Manager]
+RuntimeWatchdogSec=15
+RebootWatchdogSec=2min
+EOL
+        log_ok "systemd watchdog configured (15s timeout)."
+    fi
+
+    # 3. Reboot automatically after a kernel panic instead of halting forever
+    if [ -f "$PANIC_SYSCTL_CONF" ]; then
+        log_warn "$PANIC_SYSCTL_CONF already exists. No changes made — please check manually."
+    else
+        log_step "Configuring automatic reboot on kernel panic..."
+        sudo tee "$PANIC_SYSCTL_CONF" > /dev/null << 'EOL'
+# Kiosk display: reboot 10 seconds after a kernel panic instead of hanging
+kernel.panic = 10
+EOL
+        log_ok "Kernel panic auto-reboot configured (10s)."
+    fi
+
+    log_step "Note: power-loss recovery needs no configuration — a Raspberry Pi always boots when power returns."
+    CONFIGURED+=("Hardware watchdog: auto-reboot on system freeze/panic")
+}
+
 # ----------------------------------------------------------------------------
 # Preflight
 # ----------------------------------------------------------------------------
@@ -742,6 +800,7 @@ section_rotation
 section_audio_hdmi
 section_cec
 section_nightly_reboot
+section_hw_watchdog
 
 # Cleanup
 log_head "Cleanup"
