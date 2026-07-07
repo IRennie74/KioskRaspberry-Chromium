@@ -250,7 +250,7 @@ section_browser_autostart() {
         max_wait=$(prompt_value "Maximum wait time in seconds" "30")
         if ! [[ "$max_wait" =~ ^[0-9]+$ ]]; then
             log_warn "Invalid wait time. Using 30 seconds."
-            max_wait=30
+            max_wait=60
         fi
         network_wait="  # Wait for network connectivity (max ${max_wait}s)
   for i in \$(seq 1 $max_wait); do
