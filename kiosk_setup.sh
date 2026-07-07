@@ -491,7 +491,7 @@ section_splash() {
 
 section_resolution() {
     log_head "Screen resolution"
-    if ! ask_user "Set the screen resolution (cmdline.txt + labwc autostart)?" "y"; then
+    if ! ask_user "Set the screen resolution (cmdline.txt + labwc autostart)?" "n"; then
         return
     fi
 
